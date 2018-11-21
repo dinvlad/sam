@@ -13,9 +13,9 @@ import com.google.cloud.firestore.{DocumentSnapshot, Firestore, Transaction}
 import com.typesafe.config.ConfigFactory
 import net.ceedubs.ficus.Ficus._
 import org.broadinstitute.dsde.workbench.dataaccess.PubSubNotificationDAO
-import org.broadinstitute.dsde.workbench.google.mock.{MockGoogleDirectoryDAO, MockGoogleIamDAO, MockGooglePubSubDAO, MockGoogleStorageDAO}
+import org.broadinstitute.dsde.workbench.google.mock._
 import org.broadinstitute.dsde.workbench.google.util.DistributedLock
-import org.broadinstitute.dsde.workbench.google.{CollectionName, Document, GoogleDirectoryDAO, GoogleFirestoreOps, GoogleIamDAO}
+import org.broadinstitute.dsde.workbench.google.{CollectionName, Document, GoogleDirectoryDAO, GoogleFirestoreService, GoogleIamDAO}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.sam.api.StandardUserInfoDirectives._
 import org.broadinstitute.dsde.workbench.sam.api._
@@ -84,7 +84,7 @@ object TestSupport extends TestSupport{
     val pubSubDAO = new MockGooglePubSubDAO()
     val googleStorageDAO = new MockGoogleStorageDAO()
     val notificationDAO = new PubSubNotificationDAO(pubSubDAO, "foo")
-    val cloudKeyCache = new GoogleKeyCache(googleIamDAO, googleStorageDAO, pubSubDAO, googleServicesConfig, petServiceAccountConfig)
+    val cloudKeyCache = new GoogleKeyCache(googleIamDAO, googleStorageDAO, FakeGoogleStorageInterpreter, pubSubDAO, googleServicesConfig, petServiceAccountConfig)
     val googleExt = cloudExtensions.getOrElse(new GoogleExtensions(
       testDistributedLock,
       directoryDAO,
@@ -119,7 +119,7 @@ object TestSupport extends TestSupport{
 
 final case class SamDependencies(resourceService: ResourceService, policyEvaluatorService: PolicyEvaluatorService, userService: UserService, statusService: StatusService, managedGroupService: ManagedGroupService, directoryDAO: MockDirectoryDAO, policyDao: AccessPolicyDAO, val cloudExtensions: CloudExtensions)
 
-object TestGoogleFirestore extends GoogleFirestoreOps[IO]{
+object TestGoogleFirestore extends GoogleFirestoreService[IO]{
   override def set(
       collectionName: CollectionName,
       document: Document,

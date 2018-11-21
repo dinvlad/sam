@@ -125,7 +125,7 @@ class GoogleExtensions(
     for {
       user <- directoryDAO.loadSubjectFromGoogleSubjectId(ownerGoogleSubjectId)
 
-      subject <- directoryDAO.loadSubjectFromGoogleSubjectId(GoogleSubjectId(googleServicesConfig.serviceAccountClientId)) //dirty temporary code TODO: this call should be removed after https://broadinstitute.atlassian.net/browse/GAWB-3747
+      subject <- directoryDAO.loadSubjectFromGoogleSubjectId(GoogleSubjectId(googleServicesConfig.serviceAccountClientId))
       serviceAccountUserInfo <- subject match {
         case Some(uid: WorkbenchUserId) => IO.pure(UserInfo(OAuth2BearerToken(""), uid, googleServicesConfig.serviceAccountClientEmail, 0))
         case Some(_) =>
@@ -148,7 +148,7 @@ class GoogleExtensions(
       _ <- IO.fromFuture(IO(samApplication.resourceService.createResource(extensionResourceType, GoogleExtensions.resourceId, serviceAccountUserInfo))) handleErrorWith {
         case e: WorkbenchExceptionWithErrorReport if e.errorReport.statusCode == Option(StatusCodes.Conflict) => IO.unit
       }
-      _ <- IO.fromFuture(IO(googleKeyCache.onBoot()))
+      _ <- googleKeyCache.onBoot()
     } yield ()
   }
 
@@ -254,7 +254,8 @@ class GoogleExtensions(
     googleDirectoryDAO.deleteGroup(groupEmail)
 
   @deprecated("Use new two-argument version of this function", "Sam Phase 3")
-  def createUserPetServiceAccount(user: WorkbenchUser): Future[PetServiceAccount] = createUserPetServiceAccount(user, petServiceAccountConfig.googleProject)
+  def createUserPetServiceAccount(user: WorkbenchUser): Future[PetServiceAccount] =
+    createUserPetServiceAccount(user, petServiceAccountConfig.googleProject).unsafeToFuture()
 
   @deprecated("Use new two-argument version of this function", "Sam Phase 3")
   def deleteUserPetServiceAccount(userId: WorkbenchUserId): Future[Boolean] =
@@ -274,7 +275,7 @@ class GoogleExtensions(
       }
     } yield deletedSomething
 
-  def createUserPetServiceAccount(user: WorkbenchUser, project: GoogleProject): Future[PetServiceAccount] = {
+  def createUserPetServiceAccount(user: WorkbenchUser, project: GoogleProject): IO[PetServiceAccount] = {
     val (petSaName, petSaDisplayName) = toPetSAFromUser(user)
     // The normal situation is that the pet either exists in both ldap and google or neither.
     // Sometimes, especially in tests, the pet may be removed from ldap, but not google or the other way around.
@@ -313,26 +314,26 @@ class GoogleExtensions(
     } yield pet
 
     val lock = LockPath(CollectionName(s"${project.value}-createPet"), Document(user.id.value), 30 seconds)
-    distributedLock.withLock(lock).use(_ => createPet).unsafeToFuture()
+    distributedLock.withLock(lock).use(_ => createPet)
   }
 
-  def getPetServiceAccountKey(userEmail: WorkbenchEmail, project: GoogleProject): Future[Option[String]] =
+  def getPetServiceAccountKey(userEmail: WorkbenchEmail, project: GoogleProject): IO[Option[String]] =
     for {
-      subject <- directoryDAO.loadSubjectFromEmail(userEmail).unsafeToFuture()
+      subject <- directoryDAO.loadSubjectFromEmail(userEmail)
       key <- subject match {
         case Some(userId: WorkbenchUserId) => getPetServiceAccountKey(WorkbenchUser(userId, None, userEmail), project).map(Option(_))
-        case _ => Future.successful(None)
+        case _ => IO.pure(None)
       }
     } yield key
 
-  def getPetServiceAccountKey(user: WorkbenchUser, project: GoogleProject): Future[String] =
+  def getPetServiceAccountKey(user: WorkbenchUser, project: GoogleProject): IO[String] =
     for {
       pet <- createUserPetServiceAccount(user, project)
       key <- googleKeyCache.getKey(pet)
     } yield key
 
   def getPetServiceAccountToken(user: WorkbenchUser, project: GoogleProject, scopes: Set[String]): Future[String] =
-    getPetServiceAccountKey(user, project).flatMap { key =>
+    getPetServiceAccountKey(user, project).unsafeToFuture().flatMap { key =>
       getAccessTokenUsingJson(key, scopes)
     }
 
@@ -354,7 +355,7 @@ class GoogleExtensions(
         case Some(opId) => pollShellProjectCreation(opId) //poll until it's created
         case None => Future.successful(())
       }
-      key <- getPetServiceAccountKey(user, GoogleProject(projectName))
+      key <- getPetServiceAccountKey(user, GoogleProject(projectName)).unsafeToFuture()
     } yield key
   }
 
@@ -383,12 +384,12 @@ class GoogleExtensions(
     credential.refreshAccessToken.getTokenValue
   }
 
-  def removePetServiceAccountKey(userId: WorkbenchUserId, project: GoogleProject, keyId: ServiceAccountKeyId): Future[Unit] =
+  def removePetServiceAccountKey(userId: WorkbenchUserId, project: GoogleProject, keyId: ServiceAccountKeyId): IO[Unit] =
     for {
-      maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project)).unsafeToFuture()
+      maybePet <- directoryDAO.loadPetServiceAccount(PetServiceAccountId(userId, project))
       result <- maybePet match {
         case Some(pet) => googleKeyCache.removeKey(pet, keyId)
-        case None => Future.successful(())
+        case None => IO.unit
       }
     } yield result
 

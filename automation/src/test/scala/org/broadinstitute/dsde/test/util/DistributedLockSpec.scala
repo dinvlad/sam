@@ -5,7 +5,7 @@ import java.util.concurrent.TimeUnit
 import cats.effect.IO
 import cats.kernel.Eq
 import cats.implicits._
-import org.broadinstitute.dsde.workbench.google.GoogleFirestoreOpsInterpreters
+import org.broadinstitute.dsde.workbench.google.GoogleFirestoreInterpreters
 import org.broadinstitute.dsde.workbench.google.util.{
   DistributedLock,
   DistributedLockConfig
@@ -28,11 +28,11 @@ class DistributedLockSpec extends AsyncFlatSpec with Matchers {
   val config = DistributedLockConfig(5 seconds, 5)
 
   val lockResource: cats.effect.Resource[IO, DistributedLock[IO]] = for {
-    db <- GoogleFirestoreOpsInterpreters.firestore[IO](
+    db <- GoogleFirestoreInterpreters.firestore[IO](
       GCS.pathToSamTestFirestoreAccountPath
     )
   } yield {
-    val googeFireStoreOps = GoogleFirestoreOpsInterpreters.ioFirestore(db)
+    val googeFireStoreOps = GoogleFirestoreInterpreters.ioFirestore(db)
     DistributedLock("samServiceTest", config, googeFireStoreOps)
   }
 
@@ -125,11 +125,11 @@ class DistributedLockSpec extends AsyncFlatSpec with Matchers {
 
     val config = DistributedLockConfig(1 seconds, 2)
     val lockResource: cats.effect.Resource[IO, DistributedLock[IO]] = for {
-      db <- GoogleFirestoreOpsInterpreters.firestore[IO](
+      db <- GoogleFirestoreInterpreters.firestore[IO](
         GCS.pathToSamTestFirestoreAccountPath
       )
     } yield {
-      val googeFireStoreOps = GoogleFirestoreOpsInterpreters.ioFirestore(db)
+      val googeFireStoreOps = GoogleFirestoreInterpreters.ioFirestore(db)
       DistributedLock("samServiceTest", config, googeFireStoreOps)
     }
 
