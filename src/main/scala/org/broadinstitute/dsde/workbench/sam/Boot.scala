@@ -19,8 +19,8 @@ import org.broadinstitute.dsde.workbench.google.GoogleCredentialModes.{Json, Pem
 import org.broadinstitute.dsde.workbench.google.util.DistributedLock
 import org.broadinstitute.dsde.workbench.google.{
   GoogleDirectoryDAO,
-  GoogleFirestoreInterpreters,
-  GoogleStorageInterpreters,
+  GoogleFirestoreInterpreter,
+  GoogleStorageInterpreter,
   GoogleStorageService,
   HttpGoogleDirectoryDAO,
   HttpGoogleIamDAO,
@@ -113,17 +113,17 @@ object Boot extends IOApp with LazyLogging {
       appDependencies <- appConfig.googleConfig match {
         case Some(config) =>
           for {
-            googleFire <- GoogleFirestoreInterpreters.firestore[IO](
+            googleFire <- GoogleFirestoreInterpreter.firestore[IO](
               config.googleServicesConfig.serviceAccountCredentialJson.firestoreServiceAccountJsonPath.asString)
-            googleStorage <- GoogleStorageInterpreters.storage[IO](
+            googleStorage <- GoogleStorageInterpreter.storage[IO](
               config.googleServicesConfig.serviceAccountCredentialJson.defaultServiceAccountJsonPath.asString)
           } yield {
-            val ioFireStore = GoogleFirestoreInterpreters.ioFirestore(googleFire)
+            val ioFireStore = GoogleFirestoreInterpreter[IO](googleFire)
             // googleServicesConfig.resourceNamePrefix is an environment specific variable passed in https://github.com/broadinstitute/firecloud-develop/blob/fade9286ff0aec8449121ed201ebc44c8a4d57dd/run-context/fiab/configs/sam/docker-compose.yaml.ctmpl#L24
             // Use resourceNamePrefix to avoid collision between different fiab environments (we share same firestore for fiabs)
             val lock =
               DistributedLock[IO](s"sam-${config.googleServicesConfig.resourceNamePrefix.getOrElse("local")}", appConfig.distributedLockConfig, ioFireStore)
-            val newGoogleStorage = GoogleStorageInterpreters.ioStorage(googleStorage, blockingEc)
+            val newGoogleStorage = GoogleStorageInterpreter[IO](googleStorage, blockingEc)
             val resourceTypeMap = appConfig.resourceTypes.map(rt => rt.name -> rt).toMap
             val cloudExtension = createGoogleCloudExt(accessPolicyDao, directoryDAO, config, resourceTypeMap, lock, newGoogleStorage)
             createAppDepenciesWithSamRoutes(appConfig, cloudExtension, accessPolicyDao, directoryDAO)
