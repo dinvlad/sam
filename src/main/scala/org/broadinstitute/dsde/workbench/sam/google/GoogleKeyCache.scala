@@ -24,7 +24,7 @@ import scala.concurrent.{ExecutionContext, Future}
   */
 class GoogleKeyCache(
     val googleIamDAO: GoogleIamDAO,
-    val googleStorageDAO: GoogleStorageDAO,
+    val googleStorageDAO: GoogleStorageDAO, //this is only used for GoogleKeyCacheMonitorSupervisor to trigger pubsub notification.
     val googleStorageAlg: GoogleStorageService[IO],
     val googlePubSubDAO: GooglePubSubDAO,
     val googleServicesConfig: GoogleServicesConfig,
