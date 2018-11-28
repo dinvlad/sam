@@ -11,18 +11,20 @@ import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.cloud.storage.{BucketInfo, StorageException}
 import com.google.cloud.storage.BucketInfo.LifecycleRule
 import com.typesafe.scalalogging.LazyLogging
-import org.broadinstitute.dsde.workbench.google.{GcsBlobName, GoogleIamDAO, GooglePubSubDAO, GoogleStorageDAO, GoogleStorageService}
+import org.broadinstitute.dsde.workbench.google.util.{DistributedLock, LockPath}
+import org.broadinstitute.dsde.workbench.google.{CollectionName, Document, GcsBlobName, GoogleIamDAO, GooglePubSubDAO, GoogleStorageDAO, GoogleStorageService}
 import org.broadinstitute.dsde.workbench.model._
 import org.broadinstitute.dsde.workbench.model.google.{GcsObjectName, GoogleProject, ServiceAccountKey, ServiceAccountKeyId}
 import org.broadinstitute.dsde.workbench.sam.config.{GoogleServicesConfig, PetServiceAccountConfig}
 import org.broadinstitute.dsde.workbench.sam.service.KeyCache
-
+import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 
 /**
   * Created by mbemis on 1/10/18.
   */
 class GoogleKeyCache(
+    val distributedLock: DistributedLock[IO],
     val googleIamDAO: GoogleIamDAO,
     val googleStorageDAO: GoogleStorageDAO, //this is only used for GoogleKeyCacheMonitorSupervisor to trigger pubsub notification.
     val googleStorageAlg: GoogleStorageService[IO],
@@ -63,8 +65,8 @@ class GoogleKeyCache(
     }
   }
 
-  override def getKey(pet: PetServiceAccount): IO[String] =
-    for {
+  override def getKey(pet: PetServiceAccount): IO[String] = {
+    val getKeyIO = for {
       keyObjects <- googleStorageAlg
         .unsafeListObjectsWithPrefix(googleServicesConfig.googleKeyCacheConfig.bucketName, keyNamePrefix(pet.id.project, pet.serviceAccount.email))
       keys <- IO.fromFuture(IO(googleIamDAO.listUserManagedServiceAccountKeys(pet.id.project, pet.serviceAccount.email).map(_.toList)))
@@ -78,6 +80,9 @@ class GoogleKeyCache(
           retrieveActiveKey(pet, keyObjects, serviceAccountKeys)
       }
     } yield res
+    val lockPath = LockPath(CollectionName(s"${pet.id.project.value}-getKey"), Document(pet.serviceAccount.subjectId.value), 20 seconds)
+    distributedLock.withLock(lockPath).use(_ => getKeyIO)
+  }
 
   override def removeKey(pet: PetServiceAccount, keyId: ServiceAccountKeyId): IO[Unit] =
     for {

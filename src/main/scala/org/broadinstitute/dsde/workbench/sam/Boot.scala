@@ -178,7 +178,7 @@ object Boot extends IOApp with LazyLogging {
       "google"
     )
     val googleKeyCache =
-      new GoogleKeyCache(googleIamDAO, googleStorageDAO, googleStorageNew, googlePubSubDAO, config.googleServicesConfig, config.petServiceAccountConfig)
+      new GoogleKeyCache(distributedLock, googleIamDAO, googleStorageDAO, googleStorageNew, googlePubSubDAO, config.googleServicesConfig, config.petServiceAccountConfig)
     val notificationDAO = new PubSubNotificationDAO(googlePubSubDAO, config.googleServicesConfig.notificationTopic)
 
     new GoogleExtensions(

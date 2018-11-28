@@ -67,7 +67,7 @@ object TestSupport extends TestSupport{
   val schemaLockConfig = config.as[SchemaLockConfig]("schemaLock")
   val dirURI = new URI(directoryConfig.directoryUrl)
 
-  val testDistributedLock = DistributedLock[IO]("", appConfig.distributedLockConfig, TestGoogleFirestore)
+  val fakeDistributedLock = DistributedLock[IO]("", appConfig.distributedLockConfig, FakeGoogleFirestore)
   def proxyEmail(workbenchUserId: WorkbenchUserId) = WorkbenchEmail(s"PROXY_$workbenchUserId@${googleServicesConfig.appsDomain}")
   def googleSubjectIdHeaderWithId(googleSubjectId: GoogleSubjectId) = RawHeader(googleSubjectIdHeader, googleSubjectId.value)
   def genGoogleSubjectId(): GoogleSubjectId = GoogleSubjectId(genRandom(System.currentTimeMillis()))
@@ -84,9 +84,9 @@ object TestSupport extends TestSupport{
     val pubSubDAO = new MockGooglePubSubDAO()
     val googleStorageDAO = new MockGoogleStorageDAO()
     val notificationDAO = new PubSubNotificationDAO(pubSubDAO, "foo")
-    val cloudKeyCache = new GoogleKeyCache(googleIamDAO, googleStorageDAO, FakeGoogleStorageInterpreter, pubSubDAO, googleServicesConfig, petServiceAccountConfig)
+    val cloudKeyCache = new GoogleKeyCache(fakeDistributedLock, googleIamDAO, googleStorageDAO, FakeGoogleStorageInterpreter, pubSubDAO, googleServicesConfig, petServiceAccountConfig)
     val googleExt = cloudExtensions.getOrElse(new GoogleExtensions(
-      testDistributedLock,
+      fakeDistributedLock,
       directoryDAO,
       policyDAO,
       googleDirectoryDAO,
@@ -119,7 +119,7 @@ object TestSupport extends TestSupport{
 
 final case class SamDependencies(resourceService: ResourceService, policyEvaluatorService: PolicyEvaluatorService, userService: UserService, statusService: StatusService, managedGroupService: ManagedGroupService, directoryDAO: MockDirectoryDAO, policyDao: AccessPolicyDAO, val cloudExtensions: CloudExtensions)
 
-object TestGoogleFirestore extends GoogleFirestoreService[IO]{
+object FakeGoogleFirestore extends GoogleFirestoreService[IO]{
   override def set(
       collectionName: CollectionName,
       document: Document,
